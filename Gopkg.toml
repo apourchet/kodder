@@ -1,0 +1,11 @@
+required = [
+    "github.com/axw/gocov/gocov",
+    "github.com/AlekSi/gocov-xml",
+    "github.com/matm/gocov-html",
+    "github.com/golang/mock/gomock",
+    "github.com/golang/mock/mockgen",
+    "golang.org/x/lint/golint",
+    "golang.org/x/tools/cmd/goimports",
+    "github.com/client9/misspell/cmd/misspell",
+    "github.com/alecthomas/gometalinter",
+]

@@ -1,0 +1,11 @@
+vendor
+ext-tools
+mocks
+
+bin/kodder
+kodder
+
+env
+.cache
+__pycache__
+*.pyc
