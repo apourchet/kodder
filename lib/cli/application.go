@@ -5,10 +5,12 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
 	"time"
 
 	"github.com/uber/makisu/lib/log"
+	"github.com/uber/makisu/lib/mountutils"
 	"go.uber.org/atomic"
 )
 
@@ -16,19 +18,33 @@ type Application struct {
 	ListenFlags `commander:"flagstruct=listen"`
 	BuildFlags  `commander:"flagstruct=build"`
 	RunFlags    `commander:"flagstruct=run"`
-	building    *atomic.Bool
+
+	building *atomic.Bool
+
+	// originals is the list of files/directories that were
+	// there when the app was started.
+	originals map[string]bool
 }
 
 func NewApplication() *Application {
 	return &Application{
 		ListenFlags: NewListenFlags(),
 
-		building: atomic.NewBool(false),
+		building:  atomic.NewBool(false),
+		originals: map[string]bool{"/makisu-storage": true},
 	}
 }
 
 func (app *Application) CommanderDefault() error {
 	return fmt.Errorf("need one of `build`, `run` or `listen` as subcommand")
+}
+
+func (app *Application) PostFlagParse() error {
+	filepath.Walk("/", func(path string, fi os.FileInfo, err error) error {
+		app.originals[path] = true
+		return nil
+	})
+	return nil
 }
 
 func (app *Application) Listen() error {
@@ -76,7 +92,9 @@ func (app *Application) build(rw http.ResponseWriter, req *http.Request) {
 		rw.Write([]byte("Already processing a request"))
 		return
 	}
-	defer app.building.Store(false)
+	defer func() {
+		app.building.Store(false)
+	}()
 
 	var fl http.Flusher
 	if f, ok := rw.(http.Flusher); ok {
@@ -127,5 +145,42 @@ func (app *Application) build(rw http.ResponseWriter, req *http.Request) {
 			exitCode = ws.ExitStatus()
 		}
 	}
-	fmt.Fprintf(rw, `{"build_code": %d}\n`, exitCode)
+	fmt.Fprintf(rw, `{"build_code": %d}`+"\n", exitCode)
+
+	if err := app.cleanup(); err != nil {
+		fmt.Fprintf(rw, `{"reset_error": %v}`+"\n", err)
+		log.Errorf("Cleanup failed, exiting: %v", err)
+		os.Exit(1)
+		return
+	}
+	log.Infof("Build finished, exit code: %d", exitCode)
+}
+
+func (app *Application) cleanup() error {
+	root, err := os.Open("/")
+	if err != nil {
+		return fmt.Errorf("cleanup error: %v", err)
+	}
+	infos, err := root.Readdir(-1)
+	if err != nil {
+		return fmt.Errorf("cleanup error: %v", err)
+	}
+	for _, info := range infos {
+		fname := filepath.Join("/", info.Name())
+		if skip, err := mountutils.ContainsMountpoint(fname); err != nil {
+			return fmt.Errorf("failed to check mountpoints: %v", err)
+		} else if skip {
+			log.Debugf("Skipping cleanup of %v, mountpoint detected", fname)
+			continue
+		} else if _, found := app.originals[fname]; found {
+			log.Debugf("Skipping cleanup of %v, present at container launch", fname)
+			continue
+		}
+
+		log.Infof("Cleaning up dir: %v", fname)
+		if err := os.RemoveAll(fname); err != nil {
+			return fmt.Errorf("failed to cleanup %v: %v", fname, err)
+		}
+	}
+	return nil
 }
