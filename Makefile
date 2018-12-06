@@ -104,3 +104,11 @@ cunit-test: $(ALL_SRC)
 
 integration: env image
 	PACKAGE_VERSION=$(PACKAGE_VERSION) ./env/bin/py.test --maxfail=1 --durations=6 --timeout=300 -vv integration 
+
+### Misc targets.
+.PHONY: clean
+
+clean:
+	-rm -rf vendor
+	-rm kodder
+	-rm -rf env
