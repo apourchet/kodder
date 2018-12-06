@@ -124,8 +124,11 @@
   digest = "1:75670166da7507e1a6c7a19e6243cfd48177bcc666d3033633144c314b7484d4"
   name = "github.com/uber/makisu"
   packages = [
+    "lib/fileio",
     "lib/log",
     "lib/mountutils",
+    "lib/pathutils",
+    "lib/utils",
   ]
   pruneopts = ""
   revision = "74e9b383b39ef4562a7e9a86f7815096b04acbde"
@@ -227,8 +230,10 @@
     "github.com/golang/mock/gomock",
     "github.com/golang/mock/mockgen",
     "github.com/matm/gocov-html",
+    "github.com/uber/makisu/lib/fileio",
     "github.com/uber/makisu/lib/log",
     "github.com/uber/makisu/lib/mountutils",
+    "github.com/uber/makisu/lib/utils",
     "go.uber.org/atomic",
     "golang.org/x/lint/golint",
     "golang.org/x/tools/cmd/goimports",
