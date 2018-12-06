@@ -3,7 +3,10 @@ ext-tools
 mocks
 
 bin/kodder
-kodder
+bin/kodderd
+
+cmd/kodder/kodder
+cmd/kodderd/kodderd
 
 env
 .cache

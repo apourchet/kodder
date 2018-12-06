@@ -11,11 +11,10 @@ import (
 	"go.uber.org/atomic"
 )
 
-type Application struct {
-	ListenFlags `commander:"flagstruct=listen"`
-	ReadyFlags  `commander:"flagstruct=ready"`
-	BuildFlags  `commander:"flagstruct=build"`
-	RunFlags    `commander:"flagstruct=run"`
+type DaemonApplication struct {
+	Socket  string `commander:"flag=socket,The path to the socket that Kodder will listen on for build requests"`
+	Replace bool   `commander:"flag=replace,Whether or not to remove an existing socket at the same path"`
+	Port    *int   `commander:"flag=port,The port that Kodder will listen on for build requests"`
 
 	building *atomic.Bool
 
@@ -24,25 +23,21 @@ type Application struct {
 	originals map[string]bool
 }
 
-func NewApplication() *Application {
-	return &Application{
-		ListenFlags: NewListenFlags(),
-		ReadyFlags:  NewReadyFlags(),
+func NewDaemonApplication() *DaemonApplication {
+	return &DaemonApplication{
+		Socket:  defaultEnv("KODDER_SOCKET", "/kodder/kodder.sock"),
+		Replace: false,
 
 		building:  atomic.NewBool(false),
 		originals: map[string]bool{"/makisu-storage": true},
 	}
 }
 
-func (app *Application) CommanderDefault() error {
-	return fmt.Errorf("need one of `build`, `run` or `listen` as subcommand")
+func (app *DaemonApplication) CommanderDefault() error {
+	return app.listen()
 }
 
-func (app *Application) PostFlagParse() error {
-	return nil
-}
-
-func (app *Application) Listen() error {
+func (app *DaemonApplication) listen() error {
 	filepath.Walk("/", func(path string, fi os.FileInfo, err error) error {
 		app.originals[path] = true
 		return nil
@@ -53,7 +48,7 @@ func (app *Application) Listen() error {
 	mux.HandleFunc("/exit", app.exit)
 	mux.HandleFunc("/build", app.build)
 
-	lis, err := app.ListenFlags.getListener()
+	lis, err := app.getListener()
 	if err != nil {
 		return fmt.Errorf("failed to get listener: %v", err)
 	}
@@ -65,7 +60,7 @@ func (app *Application) Listen() error {
 	return nil
 }
 
-func (app *Application) cleanup() error {
+func (app *DaemonApplication) cleanup() error {
 	root, err := os.Open("/")
 	if err != nil {
 		return fmt.Errorf("cleanup error: %v", err)

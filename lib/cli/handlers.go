@@ -11,7 +11,7 @@ import (
 	"github.com/uber/makisu/lib/log"
 )
 
-func (app *Application) ready(rw http.ResponseWriter, req *http.Request) {
+func (app *DaemonApplication) ready(rw http.ResponseWriter, req *http.Request) {
 	if app.building.Load() {
 		rw.WriteHeader(http.StatusConflict)
 		return
@@ -19,7 +19,7 @@ func (app *Application) ready(rw http.ResponseWriter, req *http.Request) {
 	rw.WriteHeader(http.StatusOK)
 }
 
-func (app *Application) exit(rw http.ResponseWriter, req *http.Request) {
+func (app *DaemonApplication) exit(rw http.ResponseWriter, req *http.Request) {
 	if ok := app.building.CAS(false, true); !ok {
 		rw.WriteHeader(http.StatusConflict)
 		rw.Write([]byte("Already processing a request"))
@@ -32,7 +32,7 @@ func (app *Application) exit(rw http.ResponseWriter, req *http.Request) {
 	}()
 }
 
-func (app *Application) build(rw http.ResponseWriter, req *http.Request) {
+func (app *DaemonApplication) build(rw http.ResponseWriter, req *http.Request) {
 	if ok := app.building.CAS(false, true); !ok {
 		rw.WriteHeader(http.StatusConflict)
 		rw.Write([]byte("Already processing a request"))
@@ -47,7 +47,7 @@ func (app *Application) build(rw http.ResponseWriter, req *http.Request) {
 		fl = f
 	}
 
-	args, err := app.ListenFlags.getBuildRequest(req)
+	args, err := app.getBuildRequest(req)
 	if err != nil {
 		rw.WriteHeader(http.StatusBadRequest)
 		fmt.Fprintf(rw, "%s\n", err.Error())

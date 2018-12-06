@@ -25,11 +25,15 @@ default: bins
 
 ### Targets to compile the binaries.
 .PHONY: cbins bins
-bins: bin/kodder
+bins: bin/kodder bin/kodderd
 
 bin/kodder: $(ALL_SRC) vendor
 	mkdir -p bin
-	CGO_ENABLED=0 GOOS=linux go build -tags bins $(GO_FLAGS) -o $@ *.go
+	CGO_ENABLED=0 GOOS=linux go build -tags bins $(GO_FLAGS) -o $@ cmd/kodder/*.go
+
+bin/kodderd: $(ALL_SRC) vendor
+	mkdir -p bin
+	CGO_ENABLED=0 GOOS=linux go build -tags bins $(GO_FLAGS) -o $@ cmd/kodderd/*.go
 
 cbins:
 	docker run -i --rm -v $(PWD):/go/src/$(PACKAGE_NAME) \
@@ -110,5 +114,6 @@ integration: env image
 
 clean:
 	-rm -rf vendor
-	-rm kodder
 	-rm -rf env
+	-rm -rf bin
+	-rm -rf ext-tools
