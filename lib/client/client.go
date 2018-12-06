@@ -111,7 +111,6 @@ func (cli *KodderClient) Build(flags []string, context string) error {
 	}()
 
 	args := append(flags, workerContext)
-	args = append([]string{"build"}, args...)
 	log.Infof("Arguments passed to Kodder worker: %v", args)
 
 	content, _ := json.Marshal(args)
