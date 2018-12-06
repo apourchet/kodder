@@ -7,6 +7,18 @@ import (
 	"os"
 )
 
+var RootLevelSkips = map[string]bool{
+	"/proc":            true,
+	"/sys":             true,
+	"/dev":             true,
+	"/makisu-internal": true,
+	"/makisu-storage":  true,
+}
+
+var MustRemove = []string{
+	"/makisu-storage/sandbox",
+}
+
 func defaultEnv(key, value string) string {
 	if val := os.Getenv(key); val != "" {
 		return val

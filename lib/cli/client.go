@@ -17,8 +17,8 @@ type ClientApplication struct {
 
 	LocalSharedPath  string  `commander:"flag=local,The absolute path of the local mountpoint shared with the makisu worker."`
 	WorkerSharedPath string  `commander:"flag=shared,The absolute destination of the mountpoint shared with the makisu worker."`
-	Socket           string  `commander:"flag=socket,The absolute path of the unix socket that the makisu worker listens on."`
-	HTTPAddress      *string `commander:"flag=address,The address of the Kodder worker."`
+	HTTPAddress      string  `commander:"flag=address,The address of the Kodder worker."`
+	Socket           *string `commander:"flag=socket,The absolute path of the unix socket that the makisu worker listens on."`
 }
 
 type BuildFlags struct {
@@ -66,7 +66,7 @@ func NewClientApplication() *ClientApplication {
 		},
 		LocalSharedPath:  defaultEnv("KODDER_MNT_LOCAL", "/kodder/shared"),
 		WorkerSharedPath: defaultEnv("KODDER_MNT_REMOTE", "/kodder/shared"),
-		Socket:           defaultEnv("KODDER_SOCKET", "/kodder/kodder.sock"),
+		HTTPAddress:      defaultEnv("KODDERD_ADDR", "localhost:3456"),
 	}
 }
 
@@ -110,8 +110,8 @@ func (app *ClientApplication) placeDockerfile(context string) error {
 }
 
 func (app *ClientApplication) client() *client.KodderClient {
-	if app.HTTPAddress != nil {
-		return client.NewWithAddress(*app.HTTPAddress, app.LocalSharedPath, app.WorkerSharedPath)
+	if app.Socket == nil {
+		return client.NewWithAddress(app.HTTPAddress, app.LocalSharedPath, app.WorkerSharedPath)
 	}
-	return client.NewWithSocket(app.Socket, app.LocalSharedPath, app.WorkerSharedPath)
+	return client.NewWithSocket(*app.Socket, app.LocalSharedPath, app.WorkerSharedPath)
 }

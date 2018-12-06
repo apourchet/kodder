@@ -187,6 +187,7 @@ func (cli *KodderClient) maybeGetBuildCode(line []byte, code *int) {
 		if val, found := into["build_code"]; found {
 			if str, ok := val.(string); ok {
 				if i, err := strconv.Atoi(str); err == nil {
+					log.Infof("Got build exit code: %d", i)
 					*code = i
 				}
 			}

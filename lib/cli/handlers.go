@@ -91,7 +91,7 @@ func (app *DaemonApplication) build(rw http.ResponseWriter, req *http.Request) {
 			exitCode = ws.ExitStatus()
 		}
 	}
-	fmt.Fprintf(rw, `{"build_code": %d}`+"\n", exitCode)
+	fmt.Fprintf(rw, `{"build_code": "%d"}`+"\n", exitCode)
 
 	if err := app.cleanup(); err != nil {
 		fmt.Fprintf(rw, `{"reset_error": %v}`+"\n", err)
