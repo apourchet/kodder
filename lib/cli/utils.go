@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 )
 
 var RootLevelSkips = map[string]bool{
@@ -41,4 +42,19 @@ func flushLines(r io.Reader, w io.Writer, fl http.Flusher) {
 			fl.Flush()
 		}
 	}
+}
+
+func prepCommand(args []string) (cmd *exec.Cmd, outR io.ReadCloser, errR io.ReadCloser, err error) {
+	args = append([]string{"build"}, args...)
+	cmd = exec.Command("/makisu-internal/makisu", args...)
+	outR, err = cmd.StdoutPipe()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	errR, err = cmd.StderrPipe()
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	return cmd, outR, errR, nil
 }

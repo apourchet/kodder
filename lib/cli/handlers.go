@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/uber/makisu/lib/log"
+	"go.uber.org/atomic"
 )
 
 func (app *DaemonApplication) ready(rw http.ResponseWriter, req *http.Request) {
@@ -32,15 +33,23 @@ func (app *DaemonApplication) exit(rw http.ResponseWriter, req *http.Request) {
 	}()
 }
 
+func (app *DaemonApplication) abort(rw http.ResponseWriter, req *http.Request) {
+	if !app.building.Load() {
+		rw.WriteHeader(http.StatusOK)
+		return
+	}
+	rw.WriteHeader(http.StatusOK)
+	app.aborting.Store(true)
+}
+
 func (app *DaemonApplication) build(rw http.ResponseWriter, req *http.Request) {
 	if ok := app.building.CAS(false, true); !ok {
 		rw.WriteHeader(http.StatusConflict)
 		rw.Write([]byte("Already processing a request"))
 		return
 	}
-	defer func() {
-		app.building.Store(false)
-	}()
+	app.aborting.Store(false)
+	defer app.building.Store(false)
 
 	var fl http.Flusher
 	if f, ok := rw.(http.Flusher); ok {
@@ -55,23 +64,12 @@ func (app *DaemonApplication) build(rw http.ResponseWriter, req *http.Request) {
 	}
 	log.Infof("Build arguments passed in: %+v", args)
 
-	args = append([]string{"build"}, args...)
-	cmd := exec.Command("/makisu-internal/makisu", args...)
-	outR, err := cmd.StdoutPipe()
+	cmd, outR, errR, err := prepCommand(args)
 	if err != nil {
 		rw.WriteHeader(http.StatusInternalServerError)
 		fmt.Fprintf(rw, "%s\n", err.Error())
 		return
 	}
-	defer outR.Close()
-
-	errR, err := cmd.StderrPipe()
-	if err != nil {
-		rw.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintf(rw, "%s\n", err.Error())
-		return
-	}
-	defer errR.Close()
 
 	if err := cmd.Start(); err != nil {
 		rw.WriteHeader(http.StatusInternalServerError)
@@ -83,6 +81,9 @@ func (app *DaemonApplication) build(rw http.ResponseWriter, req *http.Request) {
 	go flushLines(outR, rw, fl)
 	go flushLines(errR, rw, fl)
 
+	done := atomic.NewBool(false)
+	go app.listenForAbort(cmd, done)
+
 	var exitCode int
 	if err := cmd.Wait(); err != nil {
 		if exitError, ok := err.(*exec.ExitError); ok {
@@ -91,6 +92,7 @@ func (app *DaemonApplication) build(rw http.ResponseWriter, req *http.Request) {
 			exitCode = ws.ExitStatus()
 		}
 	}
+	done.Store(true)
 	fmt.Fprintf(rw, `{"build_code": "%d"}`+"\n", exitCode)
 
 	if err := app.cleanup(); err != nil {
@@ -100,4 +102,19 @@ func (app *DaemonApplication) build(rw http.ResponseWriter, req *http.Request) {
 		return
 	}
 	log.Infof("Build finished, exit code: %d", exitCode)
+}
+
+func (app *DaemonApplication) listenForAbort(cmd *exec.Cmd, done *atomic.Bool) {
+	for {
+		time.Sleep(1 * time.Second)
+		if app.aborting.Load() {
+			break
+		} else if done.Load() {
+			return
+		}
+	}
+	log.Warnf("Aborting build")
+	if err := cmd.Process.Kill(); err != nil {
+		log.Errorf("failed to kill process: %v", err)
+	}
 }

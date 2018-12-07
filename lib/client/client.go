@@ -19,7 +19,10 @@ import (
 	"github.com/uber/makisu/lib/utils"
 )
 
-// KodderClient is the struct that allows communication with a makisu worker.
+// ErrWorkerBusy is returned when the worker is busy.
+var ErrWorkerBusy = fmt.Errorf("Kodder worker busy")
+
+// KodderClient is the struct that allows communication with a Kodder worker.
 type KodderClient struct {
 	LocalSharedPath  string
 	WorkerSharedPath string
@@ -80,7 +83,7 @@ func (cli *KodderClient) Ready() (bool, error) {
 	return resp.StatusCode == http.StatusOK, nil
 }
 
-// Exit tells the makisu worker to exit cleanly.
+// Exit tells the Kodder worker to exit cleanly.
 func (cli *KodderClient) Exit() error {
 	req, err := http.NewRequest("GET", "http://localhost/exit", nil)
 	if err != nil {
@@ -97,7 +100,24 @@ func (cli *KodderClient) Exit() error {
 	return nil
 }
 
-// Build kicks off a build on the makisu worker at the context with the flags passed in.
+// Abort tells the Kodder worker to abort the current build.
+func (cli *KodderClient) Abort() error {
+	req, err := http.NewRequest("GET", "http://localhost/abort", nil)
+	if err != nil {
+		return err
+	}
+	resp, err := cli.HTTPDo(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("bad status code from worker: %v", resp.StatusCode)
+	}
+	return nil
+}
+
+// Build kicks off a build on the Kodder worker at the context with the flags passed in.
 func (cli *KodderClient) Build(flags []string, context string) error {
 	context, err := cli.prepareContext(context)
 	if err != nil {
@@ -127,10 +147,12 @@ func (cli *KodderClient) Build(flags []string, context string) error {
 	log.Infof("Status code from Kodder worker: %v", resp.StatusCode)
 	if err := cli.readLines(resp.Body); err != nil {
 		return err
-	} else if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("bad http status code from Kodder worker: %v", resp.StatusCode)
+	} else if resp.StatusCode == http.StatusOK {
+		return nil
+	} else if resp.StatusCode == http.StatusConflict {
+		return ErrWorkerBusy
 	}
-	return nil
+	return fmt.Errorf("bad http status code from Kodder worker: %v", resp.StatusCode)
 }
 
 // Takes in the local path of the context, copies the files to a new directory inside the worker's

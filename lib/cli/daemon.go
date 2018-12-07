@@ -18,6 +18,7 @@ type DaemonApplication struct {
 	Socket  *string `commander:"flag=socket,The path to the socket that Kodder will listen on for build requests"`
 
 	building *atomic.Bool
+	aborting *atomic.Bool
 
 	// originals is the list of files that were
 	// there when the app was started.
@@ -30,6 +31,7 @@ func NewDaemonApplication() *DaemonApplication {
 		Replace: false,
 
 		building:  atomic.NewBool(false),
+		aborting:  atomic.NewBool(false),
 		originals: map[string]bool{},
 	}
 }
@@ -48,6 +50,7 @@ func (app *DaemonApplication) listen() error {
 	mux.HandleFunc("/ready", app.ready)
 	mux.HandleFunc("/exit", app.exit)
 	mux.HandleFunc("/build", app.build)
+	mux.HandleFunc("/abort", app.abort)
 
 	lis, err := app.getListener()
 	if err != nil {

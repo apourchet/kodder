@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/apourchet/commander"
 	"github.com/apourchet/kodder/lib/client"
@@ -12,6 +13,7 @@ import (
 	"github.com/uber/makisu/lib/utils"
 )
 
+// ClientApplication is the struct that can talk to the Kodder worker through a socket or HTTP.
 type ClientApplication struct {
 	BuildFlags `commander:"flagstruct=build"`
 
@@ -19,8 +21,11 @@ type ClientApplication struct {
 	WorkerSharedPath string  `commander:"flag=shared,The absolute destination of the mountpoint shared with the makisu worker."`
 	HTTPAddress      string  `commander:"flag=address,The address of the Kodder worker."`
 	Socket           *string `commander:"flag=socket,The absolute path of the unix socket that the makisu worker listens on."`
+
+	WaitDuration time.Duration `commander:"flag=wait,The time to wait for worker to ready up (valid for build and abort calls). Format follows the golang time.Duration spec."`
 }
 
+// BuildFlags are the flags that the build command can take in.
 type BuildFlags struct {
 	Dockerfile *string `commander:"flag=f,Path to the dockerfile to build."`
 	Tag        string  `commander:"flag=t,image tag (required)"`
@@ -47,6 +52,7 @@ type BuildFlags struct {
 
 var defaultDockerfilePath = ".kodder.dockerfile"
 
+// NewClientApplication returns a new ClientApplication to talk to the Kodder worker.
 func NewClientApplication() *ClientApplication {
 	return &ClientApplication{
 		BuildFlags: BuildFlags{
@@ -68,13 +74,17 @@ func NewClientApplication() *ClientApplication {
 		LocalSharedPath:  defaultEnv("KODDER_MNT_LOCAL", "/kodder"),
 		WorkerSharedPath: defaultEnv("KODDER_MNT_REMOTE", "/kodder"),
 		HTTPAddress:      defaultEnv("KODDERD_ADDR", "localhost:3456"),
+
+		WaitDuration: 10 * time.Second,
 	}
 }
 
+// CommanderDefault gets called when no subcommand is specified.
 func (app *ClientApplication) CommanderDefault() error {
-	return fmt.Errorf("command needed; one of `ready` or `build`")
+	return fmt.Errorf("command needed; one of `ready`, `build`, `abort`")
 }
 
+// Ready returns an error if the worker is not ready to accept builds.
 func (app *ClientApplication) Ready() error {
 	if ready, err := app.client().Ready(); err != nil {
 		return err
@@ -82,6 +92,17 @@ func (app *ClientApplication) Ready() error {
 		return fmt.Errorf("worker not ready")
 	}
 	log.Infof("Worker is ready")
+	return nil
+}
+
+// Abort aborts the current build.
+func (app *ClientApplication) Abort() error {
+	if err := app.client().Abort(); err != nil {
+		return err
+	} else if err := app.waitReady(); err != nil {
+		return err
+	}
+	log.Infof("Worker build aborted")
 	return nil
 }
 
@@ -99,7 +120,30 @@ func (app *ClientApplication) Build(context string) error {
 		return err
 	}
 	args := flags.Stringify()
-	return app.client().Build(args, context)
+
+	start := time.Now()
+	for time.Since(start) < app.WaitDuration {
+		if err = app.client().Build(args, context); err == client.ErrWorkerBusy {
+			time.Sleep(250 * time.Millisecond)
+			continue
+		} else if err != nil {
+			return fmt.Errorf("build failed: %v", err)
+		}
+	}
+	return err
+}
+
+func (app *ClientApplication) waitReady() error {
+	var err error
+	var ready bool
+	start := time.Now()
+	for time.Since(start) < app.WaitDuration {
+		if ready, err = app.client().Ready(); err == nil && ready {
+			return nil
+		}
+		time.Sleep(250 * time.Millisecond)
+	}
+	return err
 }
 
 func (app *ClientApplication) placeDockerfile(context string) (func(), error) {
