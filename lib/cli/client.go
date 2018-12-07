@@ -22,8 +22,8 @@ type ClientApplication struct {
 }
 
 type BuildFlags struct {
-	Dockerfile string `commander:"flag=f,Path to the dockerfile to build."`
-	Tag        string `commander:"flag=t,image tag (required)"`
+	Dockerfile *string `commander:"flag=f,Path to the dockerfile to build."`
+	Tag        string  `commander:"flag=t,image tag (required)"`
 
 	Arguments      map[string]string `commander:"flag=build-args,Arguments to the dockerfile as per the spec of ARG. Format is a json object."`
 	Destination    string            `commander:"flag=dest,Destination of the image tar."`
@@ -45,11 +45,12 @@ type BuildFlags struct {
 	Commit              string `commander:"flag=commit,Set to explicit to only commit at steps with '#!COMMIT' annotations; Set to implicit to commit at every ADD/COPY/RUN step."`
 }
 
+var defaultDockerfilePath = ".kodder.dockerfile"
+
 func NewClientApplication() *ClientApplication {
 	return &ClientApplication{
 		BuildFlags: BuildFlags{
-			Dockerfile: "Dockerfile",
-			Arguments:  map[string]string{},
+			Arguments: map[string]string{},
 
 			AllowModifyFS: true,
 			StorageDir:    "",
@@ -64,8 +65,8 @@ func NewClientApplication() *ClientApplication {
 
 			Commit: "implicit",
 		},
-		LocalSharedPath:  defaultEnv("KODDER_MNT_LOCAL", "/kodder/shared"),
-		WorkerSharedPath: defaultEnv("KODDER_MNT_REMOTE", "/kodder/shared"),
+		LocalSharedPath:  defaultEnv("KODDER_MNT_LOCAL", "/kodder"),
+		WorkerSharedPath: defaultEnv("KODDER_MNT_REMOTE", "/kodder"),
 		HTTPAddress:      defaultEnv("KODDERD_ADDR", "localhost:3456"),
 	}
 }
@@ -86,12 +87,13 @@ func (app *ClientApplication) Ready() error {
 
 // Build starts a build on the worker after copying the context over to it.
 func (app *ClientApplication) Build(context string) error {
-	if err := app.placeDockerfile(context); err != nil {
+	cleanup, err := app.placeDockerfile(context)
+	if err != nil {
 		return fmt.Errorf("failed to move dockerfile into worker context: %v", err)
 	}
-	defer os.Remove(filepath.Join(context, ".kodder.dockerfile"))
+	defer cleanup()
 
-	app.Dockerfile = ".kodder.dockerfile"
+	app.Dockerfile = &defaultDockerfilePath
 	flags, err := commander.New().GetFlagSet(app.BuildFlags, "kodder build")
 	if err != nil {
 		return err
@@ -100,13 +102,20 @@ func (app *ClientApplication) Build(context string) error {
 	return app.client().Build(args, context)
 }
 
-func (app *ClientApplication) placeDockerfile(context string) error {
+func (app *ClientApplication) placeDockerfile(context string) (func(), error) {
+	src := filepath.Join(context, "Dockerfile")
+	if app.Dockerfile != nil {
+		src = *app.Dockerfile
+	}
+
 	uid, gid, err := utils.GetUIDGID()
 	if err != nil {
-		return fmt.Errorf("failed to get uid and gid for dockerfile move: %v", err)
+		return nil, fmt.Errorf("failed to get uid and gid for dockerfile move: %v", err)
 	}
+
 	dest := filepath.Join(context, ".kodder.dockerfile")
-	return fileio.NewCopier(nil).CopyFile(app.Dockerfile, dest, uid, gid)
+	cleanup := func() { os.Remove(dest) }
+	return cleanup, fileio.NewCopier(nil).CopyFile(src, dest, uid, gid)
 }
 
 func (app *ClientApplication) client() *client.KodderClient {
