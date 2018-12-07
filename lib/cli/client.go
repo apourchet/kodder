@@ -121,14 +121,23 @@ func (app *ClientApplication) Build(context string) error {
 	}
 	args := flags.Stringify()
 
+	target, err := prepContext(app.LocalSharedPath, app.WorkerSharedPath, context)
+	if err != nil {
+		return fmt.Errorf("failed to prepare context: %v", err)
+	}
+	localPath := filepath.Join(app.LocalSharedPath, target)
+	defer os.RemoveAll(localPath)
+	workerPath := filepath.Join(app.WorkerSharedPath, target)
+
 	start := time.Now()
 	for time.Since(start) < app.WaitDuration {
-		if err = app.client().Build(args, context); err == client.ErrWorkerBusy {
+		if err = app.client().Build(args, workerPath); err == client.ErrWorkerBusy {
 			time.Sleep(250 * time.Millisecond)
 			continue
 		} else if err != nil {
 			return fmt.Errorf("build failed: %v", err)
 		}
+		return nil
 	}
 	return err
 }
@@ -164,7 +173,7 @@ func (app *ClientApplication) placeDockerfile(context string) (func(), error) {
 
 func (app *ClientApplication) client() *client.KodderClient {
 	if app.Socket == nil {
-		return client.NewWithAddress(app.HTTPAddress, app.LocalSharedPath, app.WorkerSharedPath)
+		return client.NewWithAddress(app.HTTPAddress)
 	}
-	return client.NewWithSocket(*app.Socket, app.LocalSharedPath, app.WorkerSharedPath)
+	return client.NewWithSocket(*app.Socket)
 }

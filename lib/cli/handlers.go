@@ -23,7 +23,6 @@ func (app *DaemonApplication) ready(rw http.ResponseWriter, req *http.Request) {
 func (app *DaemonApplication) exit(rw http.ResponseWriter, req *http.Request) {
 	if ok := app.building.CAS(false, true); !ok {
 		rw.WriteHeader(http.StatusConflict)
-		rw.Write([]byte("Already processing a request"))
 		return
 	}
 	rw.WriteHeader(http.StatusOK)
@@ -45,7 +44,6 @@ func (app *DaemonApplication) abort(rw http.ResponseWriter, req *http.Request) {
 func (app *DaemonApplication) build(rw http.ResponseWriter, req *http.Request) {
 	if ok := app.building.CAS(false, true); !ok {
 		rw.WriteHeader(http.StatusConflict)
-		rw.Write([]byte("Already processing a request"))
 		return
 	}
 	app.aborting.Store(false)
