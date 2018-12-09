@@ -47,7 +47,7 @@ func NewWithAddress(address string) *KodderClient {
 func NewWithHTTP(transport *http.Transport) *KodderClient {
 	cli := &http.Client{Transport: transport}
 	return &KodderClient{
-		WorkerLog: func(line string) { fmt.Fprintf(os.Stderr, line+"\n") },
+		WorkerLog: defaultWorkerLog,
 		HTTPDo:    cli.Do,
 	}
 }
@@ -162,4 +162,22 @@ func (cli *KodderClient) maybeGetBuildCode(line []byte, code *int) {
 			}
 		}
 	}
+}
+
+func defaultWorkerLog(line string) {
+	into := map[string]interface{}{}
+	pipe := os.Stdout
+	if err := json.Unmarshal([]byte(line), &into); err == nil {
+		if val, found := into["level"]; found {
+			if str, ok := val.(string); ok && str == "error" {
+				pipe = os.Stderr
+			}
+		}
+		if val, found := into["msg"]; found {
+			if str, ok := val.(string); ok {
+				line = str
+			}
+		}
+	}
+	fmt.Fprintf(pipe, line+"\n")
 }

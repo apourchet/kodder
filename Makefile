@@ -29,7 +29,7 @@ bins: bin/kodder bin/kodderd
 
 bin/kodder: $(ALL_SRC) vendor
 	mkdir -p bin
-	CGO_ENABLED=0 GOOS=linux go build -tags bins $(GO_FLAGS) -o $@ cmd/kodder/*.go
+	GOOS=linux go build -tags bins $(GO_FLAGS) -o $@ cmd/kodder/*.go
 
 bin/kodderd: $(ALL_SRC) vendor
 	mkdir -p bin
