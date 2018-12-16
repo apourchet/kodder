@@ -10,6 +10,8 @@ import (
 
 func main() {
 	application := cli.NewClientApplication()
+	go application.HandleSignals()
+
 	cmd := commander.New()
 	if err := cmd.RunCLI(application, os.Args[1:]); err != nil {
 		log.Fatalf("FATAL: %s", err)

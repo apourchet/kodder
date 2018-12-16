@@ -3,7 +3,9 @@ package cli
 import (
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
+	"syscall"
 	"time"
 
 	"github.com/apourchet/commander"
@@ -76,6 +78,25 @@ func NewClientApplication() *ClientApplication {
 		HTTPAddress:      defaultEnv("KODDERD_ADDR", "localhost:3456"),
 
 		WaitDuration: 10 * time.Second,
+	}
+}
+
+// HandleSignals will read through the signals sent by the OS and
+// abort the build if the signal is terminal.
+func (app *ClientApplication) HandleSignals() {
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt)
+	for sig := range c {
+		log.Infof("Got signal %v", sig)
+		if sig == syscall.SIGTERM || sig == syscall.SIGKILL || sig == syscall.SIGINT ||
+			sig == syscall.SIGSTOP || sig == syscall.SIGHUP {
+			log.Infof("Signal was terminal; exiting")
+			go func() {
+				if err := app.Abort(); err == nil {
+					os.Exit(1)
+				}
+			}()
+		}
 	}
 }
 
