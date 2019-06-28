@@ -14,7 +14,6 @@ ALL_PKG_PATHS = $(shell go list -f '{{.Dir}}' ./...)
 FMT_SRC = $(shell echo "$(ALL_SRC)" | tr ' ' '\n')
 EXT_TOOLS = github.com/axw/gocov/gocov github.com/AlekSi/gocov-xml github.com/matm/gocov-html github.com/golang/mock/mockgen golang.org/x/lint/golint golang.org/x/tools/cmd/goimports github.com/client9/misspell/cmd/misspell
 EXT_TOOLS_DIR = ext-tools/$(OS)
-DEP_TOOL = $(EXT_TOOLS_DIR)/dep
 
 GO_FLAGS = -gcflags '-N -l'
 GO_VERSION = 1.11.1
@@ -48,20 +47,8 @@ $(ALL_SRC): ;
 
 
 ### Targets to install the dependencies.
-$(DEP_TOOL):
-	mkdir -p $(EXT_TOOLS_DIR)
-	go get github.com/golang/dep/cmd/dep
-	cp $(GOPATH)/bin/dep $(EXT_TOOLS_DIR)
-
-vendor: $(DEP_TOOL) Gopkg.toml
-	$(EXT_TOOLS_DIR)/dep ensure
-
-cvendor:
-	docker run --rm -v $(PWD):/go/src/$(PACKAGE_NAME) \
-		-w /go/src/$(PACKAGE_NAME) \
-		--entrypoint=/bin/sh \
-		instrumentisto/dep \
-		-c "dep ensure"
+vendor: go.mod go.sum
+	go mod vendor
 
 ext-tools: vendor $(EXT_TOOLS)
 
@@ -87,7 +74,7 @@ image:
 	docker tag $(REGISTRY)/kodder:$(PACKAGE_VERSION) kodder:latest
 
 publish: image
-	docker push $(REGISTRY)/kodder:$(PACKAGE_VERSION) 
+	docker push $(REGISTRY)/kodder:$(PACKAGE_VERSION)
 
 
 
@@ -107,7 +94,7 @@ cunit-test: $(ALL_SRC)
 		-c "make ext-tools unit-test"
 
 integration: env image
-	PACKAGE_VERSION=$(PACKAGE_VERSION) ./env/bin/py.test --maxfail=1 --durations=6 --timeout=300 -vv integration 
+	PACKAGE_VERSION=$(PACKAGE_VERSION) ./env/bin/py.test --maxfail=1 --durations=6 --timeout=300 -vv integration
 
 ### Misc targets.
 .PHONY: clean
