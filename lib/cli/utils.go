@@ -83,6 +83,7 @@ func prepContext(localShared, workerShared, context string) (string, error) {
 func prepCommand(args []string) (cmd *exec.Cmd, outR io.ReadCloser, errR io.ReadCloser, err error) {
 	args = append([]string{"build"}, args...)
 	cmd = exec.Command("/makisu-internal/makisu", args...)
+	log.Infof("Executing command: /makisu-internal/makisu %v %v", args)
 	outR, err = cmd.StdoutPipe()
 	if err != nil {
 		return nil, nil, nil, err

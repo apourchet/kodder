@@ -110,6 +110,8 @@ func (cli *KodderClient) Abort() error {
 func (cli *KodderClient) Build(flags []string, context string) error {
 	args := append(flags, context)
 	content, _ := json.Marshal(args)
+	log.Infof("Sending build request to kodderd with args %v", args)
+
 	reader := bytes.NewBuffer(content)
 	req, err := http.NewRequest("POST", "http://localhost/build", reader)
 	if err != nil {
